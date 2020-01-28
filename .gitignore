@@ -1,0 +1,12 @@
+# VS and VS code workin directories
+.vs
+.vscode
+
+# Binary folders
+x64/
+x86/
+Debug/
+Release/
+
+# Compiled shaders
+*.spv
