@@ -1,5 +1,10 @@
 #include "Application.h"
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
 #include <cstdint>
 #include <algorithm>
 #include <map>
@@ -40,10 +45,15 @@ namespace Vulkan
         CreateSwapChain();
         CreateImageViews();
         CreateRenderPass();
+        CreateDescriptorSetLayout();
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
         CreateVertexBuffer();
+        CreateIndexBuffer();
+        CreateUniformBuffer();
+        CreateDescriptorPool();
+        CreateDescriptorSets();
         CreateCommandBuffers();
         CreateSyncObjects();
     }
@@ -569,7 +579,7 @@ namespace Vulkan
 
         for (size_t i = 0; i < _swapChainImages.size(); i++) 
         {
-            VkImageViewCreateInfo createInfo = {};
+            VkImageViewCreateInfo createInfo {};
             createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             createInfo.image = _swapChainImages[i];
 
@@ -650,6 +660,35 @@ namespace Vulkan
         }
     }
 
+    void Application::CreateDescriptorSetLayout()
+    {
+        VkDescriptorSetLayoutBinding uboLayoutBinding {};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorCount = 1;
+        /*
+         * ==== enum VK_SHADER_STAGE_ALL_GRAPHICS:: ====
+         * Uniform buffer type : self-explanatory
+         * VK_SHADER_STAGE_VERTEX_BIT
+         * VK_SHADER_STAGE_FRAGMENT_BIT
+         * VK_SHADER_STAGE_ALL_GRAPHICS
+         * ...
+         */
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        // pImmutableSamplers : used for image sampling
+        uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo {};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
+
+        if (vkCreateDescriptorSetLayout(_device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) 
+        {
+            throw std::runtime_error("failed to create descriptor set layout!");
+        }
+    }
+
     void Application::CreateGraphicsPipeline()
     {
         // ==== Shader Reading ==== //
@@ -682,7 +721,7 @@ namespace Vulkan
         vertexInputInfo.vertexBindingDescriptionCount = 1;
         vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
         vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();;
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         // ==== Input assembly ==== //
         VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
@@ -701,7 +740,7 @@ namespace Vulkan
         viewport.maxDepth = 1.0f;
 
         // Creating the framebuffer scissor
-        VkRect2D scissor = {};
+        VkRect2D scissor {};
         scissor.offset = {0, 0};
         scissor.extent = _swapChainExtent;
 
@@ -727,14 +766,14 @@ namespace Vulkan
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f; // Optional
         rasterizer.depthBiasClamp = 0.0f; // Optional
         rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
         // ==== Multisampling ==== //
-        VkPipelineMultisampleStateCreateInfo multisampling = {};
+        VkPipelineMultisampleStateCreateInfo multisampling {};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -744,7 +783,7 @@ namespace Vulkan
         multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
         // ==== Color Blending ==== //
-        VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+        VkPipelineColorBlendAttachmentState colorBlendAttachment {};
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         colorBlendAttachment.blendEnable = VK_FALSE;
         colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
@@ -768,7 +807,7 @@ namespace Vulkan
         //       https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkBlendFactor.html
         //       https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkBlendOp.html
 
-        VkPipelineColorBlendStateCreateInfo colorBlending = {};
+        VkPipelineColorBlendStateCreateInfo colorBlending {};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         colorBlending.logicOpEnable = VK_FALSE;
         colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
@@ -789,16 +828,17 @@ namespace Vulkan
         //     VK_DYNAMIC_STATE_LINE_WIDTH
         // };
 
-        // VkPipelineDynamicStateCreateInfo dynamicState = {};
+        // VkPipelineDynamicStateCreateInfo dynamicState {};
         // dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         // dynamicState.dynamicStateCount = 2;
         // dynamicState.pDynamicStates = dynamicStates;
 
         // ==== Pipeline layout ==== //
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo  {};
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0; // Optional
-        pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &_descriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -807,7 +847,7 @@ namespace Vulkan
             throw std::runtime_error("Failed to create pipeline layout!");
         }
 
-        VkGraphicsPipelineCreateInfo pipelineInfo = {};
+        VkGraphicsPipelineCreateInfo pipelineInfo {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStages;
@@ -947,9 +987,82 @@ namespace Vulkan
         vkFreeMemory(_device, stagingBufferMemory, nullptr);
     }
 
+    void Application::CreateUniformBuffer()
+    {
+        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+        _uniformBuffers.resize(_swapChainImages.size());
+        _uniformBuffersMemory.resize(_swapChainImages.size());
+
+        for (size_t i = 0; i < _swapChainImages.size(); ++i)
+        {
+            CreateBuffer(bufferSize,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+                _uniformBuffers[i], 
+                _uniformBuffersMemory[i]);
+        }
+    }
+
+    void Application::CreateDescriptorPool()
+    {
+        VkDescriptorPoolSize poolSize {};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = static_cast<uint32_t>(_swapChainImages.size());
+
+        VkDescriptorPoolCreateInfo poolInfo {};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = static_cast<uint32_t>(_swapChainImages.size());
+
+        if (vkCreateDescriptorPool(_device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create descriptor pool!");
+        }
+    }
+
+    void Application::CreateDescriptorSets()
+    {
+        std::vector<VkDescriptorSetLayout> layouts(_swapChainImages.size(), _descriptorSetLayout);
+        VkDescriptorSetAllocateInfo allocInfo {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = _descriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(_swapChainImages.size());
+        allocInfo.pSetLayouts = layouts.data();
+
+        _descriptorSets.resize(_swapChainImages.size());
+
+        if (vkAllocateDescriptorSets(_device, &allocInfo, _descriptorSets.data()) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to allocate descriptor sets!");
+        }
+
+        for (size_t i = 0; i < _swapChainImages.size(); i++)
+        {
+            VkDescriptorBufferInfo bufferInfo {};
+            bufferInfo.buffer = _uniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(UniformBufferObject);
+
+            VkWriteDescriptorSet descriptorWrite {};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = _descriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pBufferInfo = &bufferInfo; // Field is used for descriptors that refer to buffer dat
+            descriptorWrite.pImageInfo = nullptr; // Is used for descriptors that refer to image data
+            descriptorWrite.pTexelBufferView = nullptr; // Is used for descriptors that refer to buffer views
+
+            vkUpdateDescriptorSets(_device, 1, &descriptorWrite, 0, nullptr);
+        }
+    }
+
     void Application::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
     {
-        VkBufferCreateInfo bufferInfo = {};
+        VkBufferCreateInfo bufferInfo {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
         bufferInfo.usage = usage;
@@ -964,7 +1077,7 @@ namespace Vulkan
         VkMemoryRequirements memRequirements;
         vkGetBufferMemoryRequirements(_device, buffer, &memRequirements);
 
-        VkMemoryAllocateInfo allocInfo = {};
+        VkMemoryAllocateInfo allocInfo {};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
@@ -1006,14 +1119,14 @@ namespace Vulkan
         VkCommandBuffer commandBuffer;
         vkAllocateCommandBuffers(_device, &allocInfo, &commandBuffer);
 
-        VkCommandBufferBeginInfo beginInfo = {};
+        VkCommandBufferBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         // We are only using one time this command so tell the driver the intent of usage
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
 
         vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-        VkBufferCopy copyRegion = {};
+        VkBufferCopy copyRegion {};
         copyRegion.srcOffset = 0; // Optional
         copyRegion.dstOffset = 0; // Optional
         copyRegion.size = size;
@@ -1021,7 +1134,7 @@ namespace Vulkan
 
         vkEndCommandBuffer(commandBuffer);
 
-        VkSubmitInfo submitInfo = {};
+        VkSubmitInfo submitInfo {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffer;
@@ -1105,6 +1218,9 @@ namespace Vulkan
             // OUTDATED (Only drawing w/ vertices)
             // vkCmdDraw(_commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
+            // Bind the descriptor set to the command
+            vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSets[i], 0, nullptr);
+
             // Drawing using indices
             vkCmdDrawIndexed(_commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
             
@@ -1126,7 +1242,7 @@ namespace Vulkan
         VkSemaphoreCreateInfo semaphoreInfo {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        VkFenceCreateInfo fenceInfo = {};
+        VkFenceCreateInfo fenceInfo {};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
@@ -1162,7 +1278,11 @@ namespace Vulkan
         CreateImageViews();
         CreateRenderPass();
         CreateGraphicsPipeline();
+
         CreateFramebuffers();
+        CreateUniformBuffer();
+        CreateDescriptorPool();
+        CreateDescriptorSets();
         CreateCommandBuffers();        
     }
 
@@ -1184,11 +1304,19 @@ namespace Vulkan
             vkDestroyImageView(_device, _swapChainImageViews[i], nullptr);
         }
         vkDestroySwapchainKHR(_device, _swapChain, nullptr);
+
+        for (size_t i = 0; i < _swapChainImages.size(); ++i)
+        {
+            vkDestroyBuffer(_device, _uniformBuffers[i], nullptr);
+            vkFreeMemory(_device, _uniformBuffersMemory[i], nullptr);
+        }
+
+        vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
     }
     
     VkShaderModule Application::CreateShaderModule(const std::vector<char>& code)
     {
-        VkShaderModuleCreateInfo createInfo = {};
+        VkShaderModuleCreateInfo createInfo {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
@@ -1278,6 +1406,8 @@ namespace Vulkan
         // Mark the image as now being in use by this frame
         _imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
 
+        UpdateUniformBuffer(imageIndex);
+
         VkSubmitInfo submitInfo {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1326,10 +1456,32 @@ namespace Vulkan
 
         _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
+
+    void Application::UpdateUniformBuffer(uint32_t currentImage)
+    {
+        static auto startTime { std::chrono::high_resolution_clock::now() };
+
+        auto currentTime { std::chrono::high_resolution_clock::now() };
+        float time { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count() };
+
+        UniformBufferObject ubo {};
+        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.projection = glm::perspective(glm::radians(45.0f), _swapChainExtent.width / (float) _swapChainExtent.height, 0.1f, 10.0f);
+
+        ubo.projection[1][1] *= -1;
+
+        void* data;
+        vkMapMemory(_device, _uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+        memcpy(data, &ubo, sizeof(ubo));
+        vkUnmapMemory(_device, _uniformBuffersMemory[currentImage]);
+    }
     
     void Application::Cleanup()
     {
         CleanupSwapChain();
+
+        vkDestroyDescriptorSetLayout(_device, _descriptorSetLayout, nullptr);
 
         vkDestroyBuffer(_device, _indexBuffer, nullptr);
         vkFreeMemory(_device, _indexBufferMemory, nullptr);

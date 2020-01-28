@@ -31,6 +31,13 @@ namespace Vulkan
         std::vector<VkPresentModeKHR> presentModes;
     };
 
+    struct UniformBufferObject
+    {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 projection;
+    };
+
     class Application
     {
         static constexpr int WIDTH  { 800 };
@@ -85,6 +92,7 @@ namespace Vulkan
         std::vector<VkImageView> _swapChainImageViews;
 
         VkRenderPass     _renderPass;
+        VkDescriptorSetLayout _descriptorSetLayout;
         VkPipelineLayout _pipelineLayout;
         VkPipeline       _graphicsPipeline;
 
@@ -92,10 +100,17 @@ namespace Vulkan
 
         VkCommandPool _commandPool;
         std::vector<VkCommandBuffer> _commandBuffers;
+
         VkBuffer _vertexBuffer;
         VkDeviceMemory _vertexBufferMemory;
         VkBuffer _indexBuffer;
         VkDeviceMemory _indexBufferMemory;
+
+        VkDescriptorPool _descriptorPool;
+        std::vector<VkDescriptorSet> _descriptorSets;
+
+        std::vector<VkBuffer> _uniformBuffers;
+        std::vector<VkDeviceMemory> _uniformBuffersMemory;
 
         std::vector<VkSemaphore> _imageAvailableSemaphores;
         std::vector<VkSemaphore> _renderFinishedSemaphores;
@@ -153,6 +168,9 @@ namespace Vulkan
         // ==== Image View ==== //
         void CreateImageViews();
 
+        // ==== Descriptor Set Layout ==== //
+        void CreateDescriptorSetLayout();
+
         // ==== Graphics Pipeline ==== //
         void CreateGraphicsPipeline();
         VkShaderModule CreateShaderModule(const std::vector<char>& code);
@@ -166,12 +184,25 @@ namespace Vulkan
         // ==== Command Pool ==== //
         void CreateCommandPool();
 
+        // ==== Descriptor Sets ==== //
+        void CreateDescriptorSets();
+
+        // ==== Buffers ==== //
         // ==== Vertex Buffer ==== //
         void CreateVertexBuffer();
+
+        // ==== Index Buffer ==== //
         void CreateIndexBuffer();
+
+        // ==== Uniform Buffer ==== //
+        void CreateUniformBuffer();
+
         void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
         uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+        // ==== Descriptor Pool ==== //
+        void CreateDescriptorPool();
 
         // ==== Command Buffers ==== //
         void CreateCommandBuffers();
@@ -187,6 +218,7 @@ namespace Vulkan
         void MainLoop();
 
         void DrawFrame();
+        void UpdateUniformBuffer(uint32_t currentImage);
         #pragma endregion //MainLoop
 
         #pragma region Cleanup
