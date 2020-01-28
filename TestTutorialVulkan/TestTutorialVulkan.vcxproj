@@ -142,10 +142,13 @@
   <ItemGroup>
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\Main.cpp" />
+    <ClCompile Include="src\Vertex.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="includes\Application.h" />
     <ClInclude Include="include\Application.h" />
+    <ClInclude Include="include\Vertex.h" />
+    <ClInclude Include="include\VulkanIncludes.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

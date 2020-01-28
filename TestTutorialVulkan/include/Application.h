@@ -1,11 +1,12 @@
 #ifndef __APPLICATION_H__
 #define __APPLICATION_H__
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
 #include <vector>
 #include <optional>
 #include <string>
+
+#include "VulkanIncludes.h"
+#include "Vertex.h"
 
 #define PHYSICAL_DEVICE_CHOICE_FIRST_DEVICE
 #define PHYSICAL_DEVICE_CHOICE_RATE_DEVICE
@@ -46,6 +47,17 @@ namespace Vulkan
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
 
+        const std::vector<Vertex> vertices = {
+            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+        };
+
+        const std::vector<uint16_t> indices = {
+            0, 1, 2, 2, 3, 0
+        };
+
         #ifdef NDEBUG
             const bool _enableValidationLayers { false };
         #else
@@ -80,6 +92,10 @@ namespace Vulkan
 
         VkCommandPool _commandPool;
         std::vector<VkCommandBuffer> _commandBuffers;
+        VkBuffer _vertexBuffer;
+        VkDeviceMemory _vertexBufferMemory;
+        VkBuffer _indexBuffer;
+        VkDeviceMemory _indexBufferMemory;
 
         std::vector<VkSemaphore> _imageAvailableSemaphores;
         std::vector<VkSemaphore> _renderFinishedSemaphores;
@@ -149,6 +165,13 @@ namespace Vulkan
 
         // ==== Command Pool ==== //
         void CreateCommandPool();
+
+        // ==== Vertex Buffer ==== //
+        void CreateVertexBuffer();
+        void CreateIndexBuffer();
+        void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+        uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+        void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
         // ==== Command Buffers ==== //
         void CreateCommandBuffers();
