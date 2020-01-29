@@ -8,10 +8,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <chrono>
 #include <cstdint>
 #include <algorithm>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <iostream>
 #include <fstream>
@@ -64,6 +68,7 @@ namespace Vulkan
         CreateTextureImageView();
         CreateTextureSampler();
 
+        LoadModel();
         CreateVertexBuffer();
         CreateIndexBuffer();
         CreateUniformBuffer();
@@ -392,7 +397,24 @@ namespace Vulkan
         QueueFamilyIndices indices { FindQueueFamilies(_physicalDevice) };
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        PopulateQueueFamilyIndices(queueCreateInfos, indices);
+
+        // Get a device queue queue from both graphics and present families
+        std::set<uint32_t> uniqueQueueFamilies { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+        // Create all the queues
+        float queuePriority = 1.0f;
+        for (uint32_t queueFamily : uniqueQueueFamilies)
+        {
+            VkDeviceQueueCreateInfo queueCreateInfo {};
+
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+
+            // Push them to a list of queues
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
 
         VkPhysicalDeviceFeatures deviceFeatures {};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
@@ -425,29 +447,6 @@ namespace Vulkan
 
         vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
         vkGetDeviceQueue(_device, indices.presentFamily.value(),  0, &_presentQueue);
-    }
-
-    void Application::PopulateQueueFamilyIndices(
-        std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
-        const QueueFamilyIndices& indices)
-    {
-        // Get a device queue queue from both graphics and present families
-        std::set<uint32_t> uniqueQueueFamilies { indices.graphicsFamily.value(), indices.presentFamily.value() };
-
-        // Create all the queues
-        float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies)
-        {
-            VkDeviceQueueCreateInfo queueCreateInfo {};
-
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-
-            // Push them to a list of queues
-            queueCreateInfos.push_back(queueCreateInfo);
-        }
     }
 
     void Application::CreateSwapChain()
@@ -1035,7 +1034,7 @@ namespace Vulkan
     void Application::CreateTextureImage()
     {
         int texWidth, texHeight, texChannels;
-        unsigned char* pixels = stbi_load("media/textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        unsigned char* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
         VkDeviceSize imageSize = texWidth * texHeight * 4;
 
         if (!pixels)
@@ -1341,9 +1340,53 @@ namespace Vulkan
         return imageView;
     }
 
+    void Application::LoadModel()
+    {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string warn, err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
+        {
+            throw std::runtime_error(warn + err);
+        }
+
+        std::unordered_map<Vertex, uint32_t> uniqueVertices {};
+        for (const auto& shape : shapes)
+        {
+            for (const auto& index : shape.mesh.indices)
+            {
+                Vertex vertex {};
+                vertex.position =
+                {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2],
+                };
+
+                vertex.uv =
+                {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+                };
+
+                vertex.color = { 1.0f, 1.0f, 1.0f };
+
+                if (uniqueVertices.count(vertex) == 0)
+                {
+                    uniqueVertices[vertex] = static_cast<uint32_t>(_vertices.size());
+                    _vertices.push_back(std::move(vertex));
+                }
+
+                _indices.push_back(uniqueVertices[vertex]);
+            }
+        }
+    }
+
     void Application::CreateVertexBuffer()
     {
-        VkDeviceSize bufferSize { sizeof(vertices[0]) * vertices.size() };
+        VkDeviceSize bufferSize { sizeof(_vertices[0]) * _vertices.size() };
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -1361,7 +1404,7 @@ namespace Vulkan
 
         void* data;
         vkMapMemory(_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, vertices.data(), bufferSize);
+        memcpy(data, _vertices.data(), bufferSize);
         vkUnmapMemory(_device, stagingBufferMemory);
 
         CreateBuffer(bufferSize, 
@@ -1378,7 +1421,7 @@ namespace Vulkan
 
     void Application::CreateIndexBuffer()
     {
-         VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+         VkDeviceSize bufferSize = sizeof(_indices[0]) * _indices.size();
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -1390,7 +1433,7 @@ namespace Vulkan
 
         void* data;
         vkMapMemory(_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, indices.data(), (size_t) bufferSize);
+        memcpy(data, _indices.data(), (size_t) bufferSize);
         vkUnmapMemory(_device, stagingBufferMemory);
 
         CreateBuffer(bufferSize,
@@ -1626,7 +1669,7 @@ namespace Vulkan
             vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
             // Bind the indices
-            vkCmdBindIndexBuffer(_commandBuffers[i], _indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdBindIndexBuffer(_commandBuffers[i], _indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
             // OUTDATED (Only drawing w/ vertices)
             // vkCmdDraw(_commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
@@ -1635,7 +1678,7 @@ namespace Vulkan
             vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSets[i], 0, nullptr);
 
             // Drawing using indices
-            vkCmdDrawIndexed(_commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+            vkCmdDrawIndexed(_commandBuffers[i], static_cast<uint32_t>(_indices.size()), 1, 0, 0, 0);
             
             vkCmdEndRenderPass(_commandBuffers[i]);
             if (vkEndCommandBuffer(_commandBuffers[i]) != VK_SUCCESS)
@@ -1928,10 +1971,10 @@ namespace Vulkan
         static auto startTime { std::chrono::high_resolution_clock::now() };
 
         auto currentTime { std::chrono::high_resolution_clock::now() };
-        float time { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count() };
+        float deltaTime { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count() };
 
         UniformBufferObject ubo {};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.model = glm::rotate(glm::mat4(1.0f), deltaTime * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.projection = glm::perspective(glm::radians(45.0f), _swapChainExtent.width / (float) _swapChainExtent.height, 0.1f, 10.0f);
 

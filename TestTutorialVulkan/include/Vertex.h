@@ -1,4 +1,6 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include <array>
 
@@ -20,7 +22,8 @@ struct Vertex
         return bindingDescription;
     };
 
-    static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions() {
+    static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions() 
+    {
         std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions {};
 
         /*
@@ -54,4 +57,22 @@ struct Vertex
 
         return attributeDescriptions;
     }
+
+    bool operator==(const Vertex& other) const
+    {
+        return position == other.position && color == other.color && uv == other.uv;
+    }  
 };
+
+namespace std
+{
+    template<> struct hash<Vertex>
+    {
+        size_t operator()(Vertex const& vertex) const
+        {
+            return ((hash<glm::vec3>()(vertex.position) ^
+                    (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+                    (hash<glm::vec2>()(vertex.uv) << 1);
+        }
+    };
+}

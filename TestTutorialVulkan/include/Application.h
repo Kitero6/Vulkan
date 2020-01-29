@@ -44,6 +44,9 @@ namespace Vulkan
         static constexpr int HEIGHT { 600 };
         static constexpr int MAX_FRAMES_IN_FLIGHT { 2 };
 
+        const std::string MODEL_PATH   { "media/models/chalet.obj" };
+        const std::string TEXTURE_PATH { "media/textures/chalet.jpg" };
+
         // CONSTANTS //
         const std::vector<const char*> _validationLayers
         {
@@ -52,23 +55,6 @@ namespace Vulkan
         const std::vector<const char*> _deviceExtensions
         {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
-        };
-
-        const std::vector<Vertex> vertices {
-            {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-            {{0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-            {{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-            {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-            {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-            {{0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-            {{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-            {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-        };
-
-        const std::vector<uint16_t> indices {
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4
         };
 
         #ifdef NDEBUG
@@ -111,6 +97,8 @@ namespace Vulkan
         VkDeviceMemory _depthImageMemory;
         VkImageView _depthImageView;
 
+        std::vector<Vertex> _vertices;
+        std::vector<uint32_t> _indices;
         VkBuffer _vertexBuffer;
         VkDeviceMemory _vertexBufferMemory;
         VkBuffer _indexBuffer;
@@ -169,9 +157,6 @@ namespace Vulkan
 
         // ==== Logical Device ==== //
         void CreateLogicalDevice();
-        void PopulateQueueFamilyIndices(
-            std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
-            const QueueFamilyIndices& indices);
 
         // ==== Swap Chain ==== //
         void CreateSwapChain();
@@ -231,6 +216,9 @@ namespace Vulkan
 
         // ==== Descriptor Sets ==== //
         void CreateDescriptorSets();
+
+        // ==== Model Loading ==== //
+        void LoadModel();
 
         // ==== Buffers ==== //
         // ==== Vertex Buffer ==== //
