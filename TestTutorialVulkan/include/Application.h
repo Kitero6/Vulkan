@@ -54,14 +54,14 @@ namespace Vulkan
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
 
-        const std::vector<Vertex> vertices = {
-            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+        const std::vector<Vertex> vertices {
+            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
         };
 
-        const std::vector<uint16_t> indices = {
+        const std::vector<uint16_t> indices {
             0, 1, 2, 2, 3, 0
         };
 
@@ -105,6 +105,10 @@ namespace Vulkan
         VkDeviceMemory _vertexBufferMemory;
         VkBuffer _indexBuffer;
         VkDeviceMemory _indexBufferMemory;
+        VkImage _textureImage;
+        VkDeviceMemory _textureImageMemory;
+        VkImageView _textureImageView;
+        VkSampler _textureSampler;
 
         VkDescriptorPool _descriptorPool;
         std::vector<VkDescriptorSet> _descriptorSets;
@@ -184,6 +188,29 @@ namespace Vulkan
         // ==== Command Pool ==== //
         void CreateCommandPool();
 
+        // ==== Texture Image ==== //
+        void CreateTextureImage();
+        void CreateImage(
+            uint32_t width, 
+            uint32_t height,
+            VkFormat format,
+            VkImageTiling tiling,
+            VkImageUsageFlags usage,
+            VkMemoryPropertyFlags properties,
+            VkImage& image,
+            VkDeviceMemory& imageMemory);
+        void TransitionImageLayout(
+            VkImage image, 
+            VkFormat format, 
+            VkImageLayout oldLayout, 
+            VkImageLayout newLayout);
+        void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+        void CreateTextureImageView();
+        void CreateTextureSampler();
+
+        VkImageView CreateImageView(VkImage image, VkFormat format) ;
+
+
         // ==== Descriptor Sets ==== //
         void CreateDescriptorSets();
 
@@ -206,6 +233,8 @@ namespace Vulkan
 
         // ==== Command Buffers ==== //
         void CreateCommandBuffers();
+        VkCommandBuffer BeginSingleTimeCommands();
+        void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
         // ==== Semaphores ==== //
         void CreateSyncObjects();

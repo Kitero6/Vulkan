@@ -10,11 +10,15 @@ layout (binding = 0) uniform UniformBufferObject
 
 layout (location = 0) in vec2 iPosition;
 layout (location = 1) in vec3 iColor;
+layout (location = 2) in vec2 iUV;
 
 layout (location = 0) out vec3 vFragColor;
+layout (location = 1) out vec2 vUV;
 
 void main() 
 {
     gl_Position = iUBO.projection * iUBO.view * iUBO.model * vec4(iPosition, 0.0, 1.0);
+
     vFragColor = iColor;
+    vUV = iUV;
 }
